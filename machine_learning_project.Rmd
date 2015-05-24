@@ -1,0 +1,89 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Edward Gañan"
+date: "Sunday, May 24, 2015"
+output: html_document
+---
+
+This project is about human activity recognition and is concerned on how well an activity was performed by the wearer. the dataset was obteined from  http://groupware.les.inf.puc-rio.br/har where 6 participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways while using accelerometers on the belt, forearm, arm, and dumbell. The output was clasified in classes A, B, C, D y E, where Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. The goal of this project is to try to predict output class based on accelerometers measures
+
+##Getting an cleanig data
+
+The data are downloaded using download.file function, we have 19622 records and   160 variables
+```{r,echo=TRUE}
+pml_training<-read.csv("pml-training.csv",na.strings=c("","#DIV/0!","NA"),
+                       stringsAsFactors=F)
+```
+
+takes variables only related to belt, forearm, arm, dumbell
+```{r,echo=TRUE}
+pml_training<-pml_training[,-c(1:7)]
+```
+
+
+remove variables with a lots NA. We ended with 52 predictors
+```{r,echo=TRUE}
+na.fn<-function(x){
+  y<-prop.table(table(is.na(x)))
+  r<-unname(y[names(y)==T])
+  if(length(r)==0) r<-0
+  r
+}
+
+var.nas<-sapply(pml_training,na.fn)
+var.nas<-names(var.nas[var.nas>0.1])
+pml_training<-subset(pml_training,select=names(pml_training) %in% var.nas ==F)
+```
+
+finally, we validate that we have complete cases
+```{r,echo=TRUE}
+table(complete.cases(pml_training))
+```
+
+
+##Somme exploratory anlysis
+We have approximately balanced dataset
+```{r,echo=TRUE,fig.height=3.2,fig.width=6}
+dat<-as.data.frame(table(pml_training$classe))
+names(dat)[1]<-"classe"
+library(ggplot2)
+p<-ggplot(dat,aes(x=classe,y=Freq))+geom_bar(stat="identity")+theme_bw()
+p
+```
+
+
+We see that all variables have an important variability
+```{r,echo=TRUE}
+library(caret)
+nsv<-nearZeroVar(pml_training,saveMetrics=T)
+nsv
+#All are FALSE
+```
+
+Reduce dimensionality to analysis classes. 12 components are required to represent 80% of variability
+```{r,echo=TRUE}
+pca<-princomp(pml_training[,-53],cor=T)
+pca.scores<-as.data.frame(pca$scores)
+pca.scores$classe<-pml_training$classe
+p<-ggplot(data=pca.scores,aes(x=Comp.1,y=Comp.2,color=classe))+
+    geom_point()
+p<-p+theme_bw()
+p
+```
+
+
+##Adjust prediction model
+For predcition we use random forest because can consider interacction between variables and its good performance in accuracy
+```{r,echo=TRUE}
+pml_training$classe<-as.factor(pml_training$classe)
+library(randomForest)
+set.seed(12568)
+modelRF<-randomForest(classe~.,ntree=1000,data=pml_training)
+modelRF
+```
+
+OOB it's a good estimate of out of sample error and we are getting a low error prediction. Also, random forest already consider Bagging for prediction outcome.
+
+
+
+
